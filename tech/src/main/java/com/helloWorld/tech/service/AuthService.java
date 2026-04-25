@@ -1,20 +1,33 @@
 package com.helloWorld.tech.service;
 
-import com.helloWorld.tech.model.converter.UserConverter;
+import com.helloWorld.tech.model.dao.RefreshTokenDao;
 import com.helloWorld.tech.model.dao.UserDao;
-import com.helloWorld.tech.model.dto.UserDto;
+import com.helloWorld.tech.model.dto.TokenResponse;
+import com.helloWorld.tech.repository.RefreshTokenRepository;
 import com.helloWorld.tech.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.time.Instant;
+import java.util.Base64;
 
 @Service
 @RequiredArgsConstructor
 public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final JwtService jwtService;
 
-    public UserDto login(String email, String rawPassword) {
+    @Value("${jwt.refresh-token-days:7}")
+    private long refreshTokenDays;
+
+    public TokenResponse login(String email, String rawPassword) {
         UserDao user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid email or password"));
 
@@ -22,9 +35,70 @@ public class AuthService {
             throw new IllegalArgumentException("Invalid email or password");
         }
 
-        UserDto dto = UserConverter.toDTO(user);
-        dto.setPassword(null); // never return password
-        return dto;
+        String accessToken = jwtService.createAccessToken(user.getId(), user.getEmail());
+
+        String refreshToken = generateRefreshToken();
+        Instant now = Instant.now();
+        Instant refreshExp = now.plusSeconds(refreshTokenDays * 24 * 60 * 60);
+
+        RefreshTokenDao rt = new RefreshTokenDao();
+        rt.setUserId(user.getId());
+        rt.setTokenHash(sha256Hex(refreshToken));
+        rt.setExpiresAt(refreshExp);
+        rt.setRevoked(false);
+        rt.setCreatedAt(now);
+        refreshTokenRepository.save(rt);
+
+        long accessExpiresIn = 15 * 60; // keep aligned with jwt.access-token-minutes default
+        return new TokenResponse(
+                "Bearer",
+                accessToken,
+                accessExpiresIn,
+                refreshToken,
+                refreshTokenDays * 24 * 60 * 60
+        );
+    }
+
+    public TokenResponse refresh(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw new IllegalArgumentException("Invalid refresh token");
+        }
+
+        RefreshTokenDao existing = refreshTokenRepository.findByTokenHash(sha256Hex(refreshToken))
+                .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
+
+        if (existing.isRevoked() || existing.getExpiresAt().isBefore(Instant.now())) {
+            throw new IllegalArgumentException("Invalid refresh token");
+        }
+
+        UserDao user = userRepository.findById(existing.getUserId())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
+
+        // Rotate refresh token: revoke old, issue new.
+        existing.setRevoked(true);
+        refreshTokenRepository.save(existing);
+
+        String newRefresh = generateRefreshToken();
+        Instant now = Instant.now();
+        Instant refreshExp = now.plusSeconds(refreshTokenDays * 24 * 60 * 60);
+
+        RefreshTokenDao rt = new RefreshTokenDao();
+        rt.setUserId(user.getId());
+        rt.setTokenHash(sha256Hex(newRefresh));
+        rt.setExpiresAt(refreshExp);
+        rt.setRevoked(false);
+        rt.setCreatedAt(now);
+        refreshTokenRepository.save(rt);
+
+        String newAccess = jwtService.createAccessToken(user.getId(), user.getEmail());
+        long accessExpiresIn = 15 * 60;
+        return new TokenResponse(
+                "Bearer",
+                newAccess,
+                accessExpiresIn,
+                newRefresh,
+                refreshTokenDays * 24 * 60 * 60
+        );
     }
 
     private boolean passwordMatches(String rawPassword, String storedPassword) {
@@ -40,6 +114,24 @@ public class AuthService {
             return passwordEncoder.matches(rawPassword, normalized);
         }
         return storedPassword.equals(rawPassword);
+    }
+
+    private static String generateRefreshToken() {
+        byte[] bytes = new byte[64];
+        new SecureRandom().nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private static String sha256Hex(String value) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] dig = md.digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(dig.length * 2);
+            for (byte b : dig) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            throw new IllegalStateException("Unable to hash token", e);
+        }
     }
 }
 

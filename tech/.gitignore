@@ -40,4 +40,7 @@ target/
 .idea/
 .vscode/
 *.iml
+
 application.yaml
+*.xml
+*.idea
