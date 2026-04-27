@@ -3,9 +3,7 @@ package com.helloWorld.tech.model.converter;
 import com.helloWorld.tech.model.dao.UserDao;
 import com.helloWorld.tech.model.dto.UserDto;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 
 @Data
@@ -17,6 +15,7 @@ public class UserConverter {
         dto.setId(entity.getId());
         dto.setName(entity.getName());
         dto.setEmail(entity.getEmail());
+        dto.setPassword(entity.getPassword());
         dto.setStatus(entity.getStatus());
         dto.setUserGrpId(entity.getUserGrpId());
 
@@ -30,6 +29,7 @@ public class UserConverter {
         entity.setId(dto.getId());
         entity.setName(dto.getName());
         entity.setEmail(dto.getEmail());
+        entity.setPassword(dto.getPassword());
         entity.setStatus(dto.getStatus());
         entity.setUserGrpId(dto.getUserGrpId());
 

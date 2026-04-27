@@ -1,6 +1,6 @@
 package com.helloWorld.tech.security;
 
-import com.helloWorld.tech.service.JwtService;
+import com.helloWorld.tech.service.impl.JwtServiceImpl;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -19,7 +19,7 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
-    private final JwtService jwtService;
+    private final JwtServiceImpl jwtService;
 
     @Override
     protected void doFilterInternal(

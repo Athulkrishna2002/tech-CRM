@@ -1,4 +1,4 @@
-package com.helloWorld.tech.service;
+package com.helloWorld.tech.service.impl;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -12,11 +12,11 @@ import java.time.Instant;
 import java.util.Date;
 
 @Service
-public class JwtService {
+public class JwtServiceImpl {
     private final SecretKey key;
     private final long accessTokenMinutes;
 
-    public JwtService(
+    public JwtServiceImpl(
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.access-token-minutes:15}") long accessTokenMinutes
     ) {

@@ -20,7 +20,7 @@ public class UserDao {
     private String name;
     private String email;
     private String password;
-    private String status;
+    private Integer status;
 
     @Column(name = "user_grp_id")
     private Integer userGrpId;
