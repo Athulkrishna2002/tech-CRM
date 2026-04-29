@@ -16,6 +16,17 @@ public interface UserRepository extends JpaRepository<UserDao, Integer> {
 
     @Query(
             value = """
+            SELECT ug.role
+            FROM `user` u
+            LEFT JOIN user_group ug ON ug.id = u.user_grp_id
+            WHERE u.id = :userId
+            """,
+            nativeQuery = true
+    )
+    Optional<String> findRoleByUserId(@Param("userId") Integer userId);
+
+    @Query(
+            value = """
             SELECT u.id,
                    u.email,
                    u.name,

@@ -8,12 +8,14 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -42,8 +44,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         try {
             Claims claims = jwtService.parseAccessTokenClaims(token);
             String userId = claims.getSubject();
+            List<SimpleGrantedAuthority> authorities = extractAuthorities(claims.get("roles"));
             UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(userId, null, List.of());
+                    new UsernamePasswordAuthenticationToken(userId, null, authorities);
             authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authentication);
         } catch (Exception ignored) {
@@ -51,6 +54,33 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private static List<SimpleGrantedAuthority> extractAuthorities(Object rolesClaim) {
+        List<String> roles = new ArrayList<>();
+
+        if (rolesClaim instanceof List<?> rawList) {
+            for (Object o : rawList) {
+                if (o == null) continue;
+                String r = String.valueOf(o).trim();
+                if (!r.isEmpty()) roles.add(r);
+            }
+        } else if (rolesClaim instanceof String s) {
+            // Support either a single role ("ADMIN") or a CSV list ("ADMIN,USER")
+            for (String part : s.split(",")) {
+                String r = part.trim();
+                if (!r.isEmpty()) roles.add(r);
+            }
+        }
+
+        List<SimpleGrantedAuthority> out = new ArrayList<>(roles.size());
+        for (String role : roles) {
+            String normalized = role.toUpperCase().startsWith("ROLE_")
+                    ? role.toUpperCase()
+                    : "ROLE_" + role.toUpperCase();
+            out.add(new SimpleGrantedAuthority(normalized));
+        }
+        return out;
     }
 }
 

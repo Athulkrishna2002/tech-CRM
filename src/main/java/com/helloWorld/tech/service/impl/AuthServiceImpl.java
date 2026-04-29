@@ -16,6 +16,7 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -37,7 +38,12 @@ public class AuthServiceImpl implements AuthService {
             throw new IllegalArgumentException("Invalid email or password");
         }
 
-        String accessToken = jwtService.createAccessToken(user.getId(), user.getEmail());
+        List<String> roles = userRepository.findRoleByUserId(user.getId())
+                .filter(r -> !r.isBlank())
+                .map(String::trim)
+                .map(List::of)
+                .orElse(List.of());
+        String accessToken = jwtService.createAccessToken(user.getId(), user.getEmail(), roles);
 
         String refreshToken = generateRefreshToken();
         Instant now = Instant.now();
@@ -93,7 +99,12 @@ public class AuthServiceImpl implements AuthService {
         rt.setCreatedAt(now);
         refreshTokenRepository.save(rt);
 
-        String newAccess = jwtService.createAccessToken(user.getId(), user.getEmail());
+        List<String> roles = userRepository.findRoleByUserId(user.getId())
+                .filter(r -> !r.isBlank())
+                .map(String::trim)
+                .map(List::of)
+                .orElse(List.of());
+        String newAccess = jwtService.createAccessToken(user.getId(), user.getEmail(), roles);
         long accessExpiresIn = 15 * 60;
         return new TokenResponse(
                 "Bearer",
